@@ -21,3 +21,7 @@ sudo apt install libboost-all-dev
     또 하나의 thread가 실행하는 context에 
     async_read를 수행하는 소켓을 연결 시켜
     main과 다른 thread에서 read를 수행
+## DayTime
+    boost::asio의 tcp를 통해서 
+    daytime 포트(13)를 통해 데이터 송수신
+    이걸 기반으로 채팅서버로 확장 시켜보면 될듯
