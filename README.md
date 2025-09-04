@@ -5,6 +5,9 @@ practice boost_asio
 sudo apt update   
 sudo apt install libboost-all-dev   
 
+`boost::thread`를 사용 할 때는
+뒤에 옵션으로 -lboost_thread를 붙여야함   
+ +혹시 모르니 -lboost_system도 추가하자
 
 # mmo   
 ## test1
