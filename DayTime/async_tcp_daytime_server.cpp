@@ -44,7 +44,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
 
         void handle_write(const boost::system::error_code& error,size_t bytes_transferred)
         {
-
+            std::cout << "writed bytes : " << bytes_transferred <<"\n";
         }
 
         tcp::socket socket_;
