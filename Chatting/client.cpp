@@ -1,51 +1,88 @@
 #include <iostream>
 #include <boost/array.hpp>
 #include <boost/asio.hpp>
+#include <boost/thread.hpp>
+#include <boost/bind/bind.hpp>
 
 
 using boost::asio::ip::tcp;
 
-int main(int argc,char * argv[]){
 
+
+class tcp_connection{
+    public:
+        tcp_connection(boost::asio::io_context &ic,char *ip, char *port)
+            :resolver_(ic),socket_(ic)
+        {
+            endpoint_ = resolver_.resolve(ip,port);
+            boost::asio::connect(socket_,endpoint_);
+            std::cout << "Connect Success\n";
+            set_name();
+            start_read();
+            start_write();
+        }
+    private:
+        void set_name(){
+            boost::array<char,32> name;
+
+            std::cout << "Please Type Name :"; 
+            std::cin.getline(name.data(),32);
+            boost::system::error_code ignored_error;
+            socket_.write_some(boost::asio::buffer(name,32),ignored_error);
+        }
+        void start_read(){
+
+            boost::asio::async_read(socket_,boost::asio::buffer(read_buf_),
+                boost::bind(&tcp_connection::read_handler,this,boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
+
+            // boost::array<boost::asio::mutable_buffer, 2> buf_= 
+            //     {boost::asio::buffer(name_buf_),boost::asio::buffer(read_buf_)};
+
+            // boost::asio::async_read(socket_,buf_,
+            //     boost::bind(&tcp_connection::read_handler,this,boost::asio::placeholders::error,
+            //     boost::asio::placeholders::bytes_transferred));
+        }
+        void read_handler(const boost::system::error_code& ec,std::size_t bytes_transmitted){
+
+            std::cout << read_buf_.data() <<"\n";
+            // std::cout << name_buf_.data()<<" : " << read_buf_.data() <<"\n";
+            start_read();
+        }
+        void start_write(){
+            std::cin.getline(write_buf_.data(),128); // 여기서 메인 스레드 블로킹
+            boost::asio::async_write(socket_,boost::asio::buffer(write_buf_),
+                boost::bind(&tcp_connection::write_handler,this,
+                boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
+        }
+        void write_handler(const boost::system::error_code& ec,std::size_t bytes_transmitted){
+            start_write();
+        }
+
+
+
+        tcp::resolver::results_type endpoint_;
+        tcp::resolver resolver_;
+        tcp::socket socket_;
+        boost::array<char,32> name_buf_;
+        boost::array<char,128> write_buf_;
+        boost::array<char,128> read_buf_;
+
+};
+int main(int argc,char * argv[]){
     try{
             if(argc!=3){
             std::cerr << "Usage : server [IP] [PORT] \n";
             exit(1);
         }
-        boost::asio::io_context io_context;
-        tcp::resolver resolver_(io_context);
-        tcp::resolver::results_type endpoint_ = resolver_.resolve(argv[1],argv[2]);
+        boost::asio::io_context io_context_;
 
-        tcp::socket socket_(io_context);
+        // tcp_connection에 모든 작동을 넘김
+        tcp_connection connection(io_context_,argv[1],argv[2]);
 
-        boost::asio::connect(socket_,endpoint_);
-        std::cout << "Connect Success\n";
-
-        boost::array<char,32> name;
-
-        std::cout << "Please Type Name :"; 
-        std::cin.getline(name.data(),32);
-
-        boost::system::error_code ignored_error;
-        socket_.write_some(boost::asio::buffer(name,128),ignored_error);
-
-        while(true){
-            boost::array<char,128> buf;
-            boost::system::error_code ec;
-            
-            std::cout << "Input : "; 
-            std::cin.getline(buf.data(),128);
-
-            boost::system::error_code ignored_error;
-            socket_.write_some(boost::asio::buffer(buf,128),ignored_error);
-
-            size_t len = socket_.read_some(boost::asio::buffer(buf),ec);
-            
-            if(ec== boost::asio::error::eof) break;
-            else if(ec) throw boost::system::system_error(ec);
-            
-            std::cout << buf.data() << "\n";
-        }
+        boost::thread thr(boost::bind(&boost::asio::io_context::run,&io_context_));
+        io_context_.run();
+        thr.join();
     }
     catch(std::exception &e){
         std::cout << e.what() <<"\n";
