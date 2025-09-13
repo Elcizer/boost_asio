@@ -25,6 +25,8 @@ class tcp_connection{
         }
         void start_chat(){ // 계속해서 Client: 만 출력되는 오류 read가 데이터가 들어오지 않았는데도 핸들러로 넘어감
             // transmitted byte가 0인데도 넘어감 -> 아마 버퍼가 string 이라 그런걸 지도
+            // -> 버퍼를 string 에서 boost::array로 바꿔서 해결 (어차피 나중에 메세지 만들 때 바이트 단위로 
+            //      관리해야해서 이게 확실히 맞는 선택인듯)
             boost::asio::async_read(socket_,boost::asio::buffer(buffer_,128),
                 boost::bind(&tcp_connection::read_handler,this,boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
@@ -35,7 +37,10 @@ class tcp_connection{
             std::cout << "bytes tranitted : " << bytes_transmitted <<"\n";
             std::cout <<name_.data()<<" :" << buffer_.data() <<"\n";
             
-            boost::asio::async_write(socket_,boost::asio::buffer(buffer_),
+            boost::array<boost::asio::mutable_buffer, 2> buf_= 
+                {boost::asio::buffer(name_),boost::asio::buffer(buffer_)};
+
+            boost::asio::async_write(socket_,buf_,
                 boost::bind(&tcp_connection::write_handler,this,
                 boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
         }

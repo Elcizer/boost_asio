@@ -32,21 +32,21 @@ class tcp_connection{
         }
         void start_read(){
 
-            boost::asio::async_read(socket_,boost::asio::buffer(read_buf_),
-                boost::bind(&tcp_connection::read_handler,this,boost::asio::placeholders::error,
-                boost::asio::placeholders::bytes_transferred));
-
-            // boost::array<boost::asio::mutable_buffer, 2> buf_= 
-            //     {boost::asio::buffer(name_buf_),boost::asio::buffer(read_buf_)};
-
-            // boost::asio::async_read(socket_,buf_,
+            // boost::asio::async_read(socket_,boost::asio::buffer(read_buf_),
             //     boost::bind(&tcp_connection::read_handler,this,boost::asio::placeholders::error,
             //     boost::asio::placeholders::bytes_transferred));
+
+            boost::array<boost::asio::mutable_buffer, 2> buf_= 
+                {boost::asio::buffer(name_buf_),boost::asio::buffer(read_buf_)};
+
+            boost::asio::async_read(socket_,buf_,
+                boost::bind(&tcp_connection::read_handler,this,boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
         }
         void read_handler(const boost::system::error_code& ec,std::size_t bytes_transmitted){
 
-            std::cout << read_buf_.data() <<"\n";
-            // std::cout << name_buf_.data()<<" : " << read_buf_.data() <<"\n";
+            // std::cout << read_buf_.data() <<"\n";
+            std::cout << name_buf_.data()<<" : " << read_buf_.data() <<"\n";
             start_read();
         }
         void start_write(){
