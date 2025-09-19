@@ -2,6 +2,7 @@
 #include <string>
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
+#include <boost/thread.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -13,7 +14,7 @@ class tcp_server;
 // 여기서 돌아가는 비동기 작업은 read,write read가 사실상 대부분 
 class tcp_connection : public boost::enable_shared_from_this<tcp_connection>{ // 이 클래스의 세션을 ptr로 설정하게 변경 
     public:
-        tcp_connection(boost::asio::io_context &io_context,tcp_server *server);
+        tcp_connection(boost::asio::io_context &io_context,tcp_server &server);
         tcp::socket &socket();
         void set_name();
         void start_chat();
@@ -26,7 +27,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>{ //
         void write_handler(const boost::system::error_code& ec,std::size_t bytes_transferred);
         bool handle_ec(const boost::system::error_code& ec);
 
-        tcp_server * server_;
+        tcp_server &server_;
         tcp::socket socket_;
         boost::array<char,128> buffer_;
         boost::array<char,32> name_;
@@ -54,9 +55,17 @@ class tcp_server{
             // erase된 원소 개수 1 -> 삭제됨 -> 메세지 출력
             // erase된 원소 개수 0 -> 이미 삭제된 상태 -> 메세지 출력 X 
         }
+        void deliver(boost::array<boost::asio::mutable_buffer, 2> buffer){
+            for(auto temp_connection: sessions_){
+                boost::asio::async_write(temp_connection->socket(),buffer,
+                    boost::bind(&tcp_server::write_handler,this,
+                        boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
+                std::cout << "send chat to " << temp_connection->get_name() <<"\n";
+            }
+        }
     private:
         void start_accept(){
-            boost::shared_ptr<tcp_connection> new_connection(new tcp_connection(io_context_,this));
+            boost::shared_ptr<tcp_connection> new_connection(new tcp_connection(io_context_,*this));
             acceptor_.async_accept(new_connection->socket(),boost::bind(&tcp_server::accept_handler,this,
                 new_connection,boost::asio::placeholders::error)); // 여기서 accept를 비동기 실행 (이벤트가 발생시 처리 후 핸들러로 넘어감)
         }
@@ -68,6 +77,8 @@ class tcp_server{
                 // 여기서 연결된 new_connection을 set에 넣음 
             }
             start_accept(); // 다시 accept을 받음 
+        }
+        void write_handler(const boost::system::error_code& ec,std::size_t bytes_transferred){
         }
     
     std::set<boost::shared_ptr<tcp_connection>> sessions_;
@@ -86,14 +97,16 @@ int main(int argv,char * argc[]){
         boost::asio::io_context io_context;
         tcp_server server(io_context,std::stoi(argc[1]));
 
+        boost::thread thr(boost::bind(&boost::asio::io_context::run,&io_context));
         io_context.run();
+        thr.join();
     }
     catch(std::exception &E){
         std::cerr << E.what() <<"\n";
     }
 }
 
-tcp_connection::tcp_connection(boost::asio::io_context &io_context,tcp_server *server) : socket_(io_context), server_(server)
+tcp_connection::tcp_connection(boost::asio::io_context &io_context,tcp_server &server) : socket_(io_context), server_(server)
 {
 
 }
@@ -115,7 +128,7 @@ void tcp_connection::start_chat(){ // 계속해서 Client: 만 출력되는 오�
         }
 void tcp_connection::read_handler(const boost::system::error_code& ec,std::size_t bytes_transmitted){
     if(handle_ec(ec)){
-        server_->remove_connection(shared_from_this());
+        server_.remove_connection(shared_from_this());
         return;
     }
     std::cout << "bytes tranitted : " << bytes_transmitted <<"\n";
@@ -124,9 +137,12 @@ void tcp_connection::read_handler(const boost::system::error_code& ec,std::size_
     boost::array<boost::asio::mutable_buffer, 2> buf_= 
         {boost::asio::buffer(name_),boost::asio::buffer(buffer_)};
 
-    boost::asio::async_write(socket_,buf_,
-        boost::bind(&tcp_connection::write_handler,shared_from_this(),
-            boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
+    server_.deliver(buf_);
+    start_chat();
+    // 에코 코드
+    // boost::asio::async_write(socket_,buf_,
+    //     boost::bind(&tcp_connection::write_handler,shared_from_this(),
+    //         boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
 }
 void tcp_connection::set_name_handler(const boost::system::error_code& ec,std::size_t bytes_transmitted){
     std::cout << "New Client !\nName : " <<name_.data() <<"\n";
@@ -134,7 +150,7 @@ void tcp_connection::set_name_handler(const boost::system::error_code& ec,std::s
 }
 void tcp_connection::write_handler(const boost::system::error_code& ec,std::size_t bytes_transferred){
     if(handle_ec(ec)){
-        server_->remove_connection(shared_from_this());
+        server_.remove_connection(shared_from_this());
         return;
     }
     start_chat();

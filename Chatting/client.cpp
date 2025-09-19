@@ -1,4 +1,5 @@
 #include <iostream>
+#include <termios.h>
 #include <boost/array.hpp>
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
@@ -47,7 +48,15 @@ class tcp_connection{
                 }
                 return;
             }
+            std::cout <<"\r";
+            for(int i=0;i<130;i++) std::cout <<" ";
+            std::cout <<"\r";
             std::cout << name_buf_.data()<<" : " << read_buf_.data() <<"\n";
+            // std::cout << write_buf_.data() << std::flush;
+            tcflush(STDIN_FILENO, TCIFLUSH);// 입력중이던 값을 무시하기 위한 장치 (OS단위 입력스트림의 flush)
+            // 입력하던 값을 사라지는 걸로 했음(일단 당장의 편의를 위해서 -> 채팅을 이어붙이는게 핵심은 아니니 )
+            std::cout << "내 write buffer: "<<write_buf_.data()<<"\n";
+            for(int i=0;i<128;i++) read_buf_[i] = 0;
             start_read();
         }
         void start_write(){
@@ -64,6 +73,7 @@ class tcp_connection{
                 }
                 return;
             }
+            for(int i=0;i<128;i++) write_buf_[i] = 0;
             start_write();
         }
         bool handle_ec(const boost::system::error_code& ec){ // 오류 -> false 
