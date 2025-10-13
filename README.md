@@ -46,3 +46,14 @@ sudo apt install libboost-all-dev
     OS의 입력스트림을 flush 해보니 문제가 해결됨.
     기존 getline()이 끊기면 OS의 입력스트림에 기존 내용이 저장된다는 것을 알 수 있었음.
 
+## Chatting 10/13
+    기존 코드는 새로운 스레드의 동작을 시작하기 전에 생성자의 블럭안에서 `cin.getline()`을 수행했기 때문에   
+    async_read()를 하더라도 곧바로 출력이 되지 않았음. (`getline()`은 async동작이 아니기 때문에)
+    따라서 한 번 입력을 하게 되면 생성자를 벗어나게 되고 `thr.join()`이 실행됐기 때문에
+    첫번째 입력 이후에는 비동기 입출력이 가능했음.
+
+    따라서 기존의 생성자에 있던 `start_write()`을 대체하는 함수인 `start_write_thread()`를 만듬
+    `start_write_thread()`는 스레드의 시작 함수이므로 만들자마자 바로 `detach()`를 통해서 동작하게 함.
+    그럼 기존의 스레드가 `async_read()`를 처리하고 생성자에서 새로 만들어진 스레드가 `cin.getline()`을 처리하게됨.
+
+    따라서 기존에 있던 문제를 해결할 수 있었음. 

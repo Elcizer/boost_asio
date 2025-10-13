@@ -13,14 +13,16 @@ using boost::asio::ip::tcp;
 class tcp_connection{
     public:
         tcp_connection(boost::asio::io_context &ic,char *ip, char *port)
-            :resolver_(ic),socket_(ic),isclose(false)
+            :resolver_(ic),socket_(ic),isclose(false),io(ic)
         {
             endpoint_ = resolver_.resolve(ip,port);
             boost::asio::connect(socket_,endpoint_);
             std::cout << "Connect Success\n";
             set_name();
             start_read();
-            start_write();
+            boost::thread thr(boost::bind(&tcp_connection::start_write_thread,this));
+            thr.detach();
+            // start_write_thread();
         }
     private:
         void set_name(){
@@ -50,14 +52,21 @@ class tcp_connection{
             }
             std::cout <<"\r";
             for(int i=0;i<130;i++) std::cout <<" ";
-            std::cout <<"\r";
+            std::cout <<"\r"; // 입력하던 내용을 지우기 위한 코드들
+            // std::cout << "thread ID : " << boost::this_thread::get_id() <<"\n"; 
             std::cout << name_buf_.data()<<" : " << read_buf_.data() <<"\n";
             // std::cout << write_buf_.data() << std::flush;
             tcflush(STDIN_FILENO, TCIFLUSH);// 입력중이던 값을 무시하기 위한 장치 (OS단위 입력스트림의 flush)
             // 입력하던 값을 사라지는 걸로 했음(일단 당장의 편의를 위해서 -> 채팅을 이어붙이는게 핵심은 아니니 )
-            std::cout << "내 write buffer: "<<write_buf_.data()<<"\n";
             for(int i=0;i<128;i++) read_buf_[i] = 0;
             start_read();
+        }
+        void start_write_thread(){
+            std::cin.getline(write_buf_.data(),128); // 여기서 메인 스레드 블로킹
+            boost::asio::async_write(socket_,boost::asio::buffer(write_buf_),
+                boost::bind(&tcp_connection::write_handler,this,
+                boost::asio::placeholders::error,boost::asio::placeholders::bytes_transferred));
+            io.run();
         }
         void start_write(){
             std::cin.getline(write_buf_.data(),128); // 여기서 메인 스레드 블로킹
@@ -73,6 +82,7 @@ class tcp_connection{
                 }
                 return;
             }
+            // std::cout << "thread ID : " << boost::this_thread::get_id() <<"\n"; 
             for(int i=0;i<128;i++) write_buf_[i] = 0;
             start_write();
         }
@@ -97,6 +107,7 @@ class tcp_connection{
 
 
         bool isclose;
+        boost::asio::io_context &io;
         tcp::resolver::results_type endpoint_;
         tcp::resolver resolver_;
         tcp::socket socket_;
@@ -116,9 +127,9 @@ int main(int argc,char * argv[]){
         // tcp_connection에 모든 작동을 넘김
         tcp_connection connection(io_context_,argv[1],argv[2]);
 
-        boost::thread thr(boost::bind(&boost::asio::io_context::run,&io_context_));
+        // boost::thread thr(boost::bind(&boost::asio::io_context::run,&io_context_));
         io_context_.run();
-        thr.join();
+        // thr.join();
     }
     catch(std::exception &e){
         std::cout << e.what() <<"\n";
